@@ -14,6 +14,8 @@ distribution-inclusive (total) returns for Public Mutual UT and PRS funds.
 | Month-end NAV snapshot | `FundPriceUT/GetAllUTFundPriceByDate` / `FundPricePRS/...` with `dd-MM-yyyy` (steps back if holiday) |
 | Distributions | `FundDistribution/GetFundDistributionHistory?schemeCode=` (homepage Fund Distribution widget) — **returns only the latest ~5 records** |
 | Fund master | `FundOverview/GetFundInfo` + latest price lists for UT/PRS type |
+| EPF-MIS status | `FundExplorerList/GetFundExplorerData` `IsEpfQualified` (also Public Mutual EPF list; KWSP 2024/2025 PDF). PRS = `N/A (PRS)` |
+| Top 5 holdings | Latest English annual/semi-annual report PDF via `ECommunicationUT` / `ECommunicationPRS` + `pdftotext` |
 
 ## Monthly update
 
@@ -23,6 +25,8 @@ python run_etl.py                  # uses HTTP cache under cache/
 python run_etl.py --force          # re-download everything
 python run_etl.py --export-only    # rebuild xlsx from existing DB
 python run_etl.py --sanity-only    # PHS comparison only
+python run_etl.py --holdings       # refresh EPF-MIS flag + top-5 holdings, re-export xlsx
+python run_etl.py --skip-holdings  # full TR run without report-PDF downloads
 ```
 
 Edit `WINDOW_START` / `WINDOW_END` in `config.py` when rolling the window forward
@@ -32,7 +36,7 @@ Throttle defaults to 1.2s between API calls. Cache lives in `cache/`.
 
 ## Schema (SQLite)
 
-- `funds` — master
+- `funds` — master, plus `epf_approved` / `epf_source`, `top1`…`top5` name & pct, `top_holdings`, `holdings_as_at`, `holdings_source`
 - `nav_daily` — daily/month-end NAV
 - `distributions` — sen/RM per unit, ex-date (`DistDate`), type; `unit_split` NULL (not published)
 - `monthly_returns` — month-end NAV, TR index (100 at first month), price vs total monthly %
@@ -45,6 +49,8 @@ Throttle defaults to 1.2s between API calls. Cache lives in `cache/`.
 2. No unit-split feed found on the public site; column reserved as NULL.
 3. PHS “Average Annual Returns” = total return / years (arithmetic), not CAGR.
 4. Foreign/MIX fund NAVs publish with a lag; chart `ReturnComputeEnddate` may trail calendar today.
+5. EPF-qualified list on the Public Mutual site is dated effective 1 April 2024 and is subject to KWSP annual review; `IsEpfQualified` is the current website flag.
+6. Money-market / cash funds often only publish an aggregate “deposits/placements with financial institutions” line, not named issuers. Wholesale PWVEF has no public report on the site.
 
 ## Disclaimer
 

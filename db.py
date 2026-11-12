@@ -21,7 +21,18 @@ CREATE TABLE IF NOT EXISTS funds (
     risk_level REAL,
     currency TEXT DEFAULT 'MYR',
     source_url TEXT,
-    updated_at TEXT
+    updated_at TEXT,
+    epf_approved TEXT,
+    epf_source TEXT,
+    top1_name TEXT, top1_pct REAL,
+    top2_name TEXT, top2_pct REAL,
+    top3_name TEXT, top3_pct REAL,
+    top4_name TEXT, top4_pct REAL,
+    top5_name TEXT, top5_pct REAL,
+    top_holdings TEXT,
+    holdings_as_at TEXT,
+    holdings_source TEXT,
+    holdings_report_type TEXT
 );
 
 CREATE TABLE IF NOT EXISTS nav_daily (
@@ -92,10 +103,34 @@ CREATE TABLE IF NOT EXISTS data_gaps (
 """
 
 
+FUNDS_EXTRA_COLUMNS = {
+    "epf_approved": "TEXT",
+    "epf_source": "TEXT",
+    "top1_name": "TEXT", "top1_pct": "REAL",
+    "top2_name": "TEXT", "top2_pct": "REAL",
+    "top3_name": "TEXT", "top3_pct": "REAL",
+    "top4_name": "TEXT", "top4_pct": "REAL",
+    "top5_name": "TEXT", "top5_pct": "REAL",
+    "top_holdings": "TEXT",
+    "holdings_as_at": "TEXT",
+    "holdings_source": "TEXT",
+    "holdings_report_type": "TEXT",
+}
+
+
+def migrate(conn: sqlite3.Connection):
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(funds)")}
+    for name, typ in FUNDS_EXTRA_COLUMNS.items():
+        if name not in cols:
+            conn.execute(f"ALTER TABLE funds ADD COLUMN {name} {typ}")
+    conn.commit()
+
+
 def connect(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    migrate(conn)
     return conn
 
 

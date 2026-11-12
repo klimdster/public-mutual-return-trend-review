@@ -14,7 +14,12 @@ def export(db_path: Path, xlsx_path: Path):
     conn.row_factory = sqlite3.Row
 
     funds = list(conn.execute(
-        "SELECT fund_code, name, abbr, fund_type, category, is_islamic FROM funds ORDER BY fund_type, name"
+        """SELECT fund_code, name, abbr, fund_type, category, is_islamic,
+                  epf_approved, epf_source,
+                  top1_name, top1_pct, top2_name, top2_pct,
+                  top3_name, top3_pct, top4_name, top4_pct,
+                  top5_name, top5_pct, top_holdings, holdings_as_at, holdings_source
+           FROM funds ORDER BY fund_type, name"""
     ))
     months = [
         r[0]
@@ -69,6 +74,12 @@ def export(db_path: Path, xlsx_path: Path):
         "PHS 'Average Annual Returns' ≈ arithmetic (total return / years), not CAGR. "
         "DIY reinvestment TR is not used as primary because distribution API truncates history."
     )
+    ws["A13"] = "EPF / holdings"
+    ws["A14"] = (
+        "epf_approved is Yes/No from Fund Explorer IsEpfQualified (Public Mutual EPF-MIS list, effective 1 Apr 2024, "
+        "subject to KWSP review). PRS funds are N/A (PRS), not No. "
+        "Top 5 holdings come from the latest English annual or semi-annual fund report PDFs."
+    )
     ws.column_dimensions["A"].width = 28
     ws.column_dimensions["B"].width = 100
 
@@ -102,6 +113,10 @@ def export(db_path: Path, xlsx_path: Path):
         "1y_total_pct", "1y_arith_ann_pct", "1y_cagr_pct",
         "3y_total_pct", "3y_arith_ann_pct", "3y_cagr_pct",
         "5y_total_pct", "5y_arith_ann_pct", "5y_cagr_pct",
+        "epf_approved", "epf_source",
+        "top1_name", "top1_pct", "top2_name", "top2_pct",
+        "top3_name", "top3_pct", "top4_name", "top4_pct",
+        "top5_name", "top5_pct", "top_holdings", "holdings_as_at", "holdings_source",
     ]
     for col, h in enumerate(h3, 1):
         cell = ws3.cell(1, col, h)
@@ -138,6 +153,18 @@ def export(db_path: Path, xlsx_path: Path):
             ws3.cell(i, base_col, a["total_return_pct"]).number_format = "0.00"
             ws3.cell(i, base_col + 1, a["arithmetic_avg_annual_pct"]).number_format = "0.00"
             ws3.cell(i, base_col + 2, a["cagr_pct"]).number_format = "0.00"
+        ws3.cell(i, 16, f["epf_approved"])
+        ws3.cell(i, 17, f["epf_source"])
+        col = 18
+        for k in range(1, 6):
+            ws3.cell(i, col, f[f"top{k}_name"])
+            cell = ws3.cell(i, col + 1, f[f"top{k}_pct"])
+            if f[f"top{k}_pct"] is not None:
+                cell.number_format = "0.00"
+            col += 2
+        ws3.cell(i, 28, f["top_holdings"])
+        ws3.cell(i, 29, f["holdings_as_at"])
+        ws3.cell(i, 30, f["holdings_source"])
     ws3.freeze_panes = "G2"
     ws3.auto_filter.ref = ws3.dimensions
 

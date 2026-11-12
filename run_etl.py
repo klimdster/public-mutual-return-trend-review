@@ -41,6 +41,7 @@ from compute_returns import (
     annualised_from_series,
 )
 from export_xlsx import export as export_xlsx
+from holdings_epf import run_holdings_and_epf
 
 MYT = ZoneInfo("Asia/Kuala_Lumpur")
 DIST_SRC = "https://www.publicmutual.com.my/home#FundDistribution"
@@ -548,6 +549,8 @@ def main():
     ap.add_argument("--export-only", action="store_true")
     ap.add_argument("--skip-nav-snapshots", action="store_true", help="Skip bulk month-end price API (faster)")
     ap.add_argument("--sanity-only", action="store_true")
+    ap.add_argument("--holdings", action="store_true", help="Only refresh EPF status + top-5 holdings, then re-export xlsx")
+    ap.add_argument("--skip-holdings", action="store_true", help="Skip EPF/holdings enrichment on a full run")
     args = ap.parse_args()
 
     if args.sanity_only:
@@ -559,11 +562,18 @@ def main():
         print(f"Exported {XLSX_PATH}")
         return
 
+    if args.holdings:
+        print("== Holdings / EPF only ==", flush=True)
+        run_holdings_and_epf(force=args.force)
+        export_xlsx(DB_PATH, XLSX_PATH)
+        print(f"Done. DB={DB_PATH} XLSX={XLSX_PATH}", flush=True)
+        return
+
     if args.force:
         # clear caches
         import shutil
 
-        for sub in ("perf", "dist", "fundinfo", "nav"):
+        for sub in ("perf", "dist", "fundinfo", "nav", "reports"):
             p = CACHE_DIR / sub
             if p.exists():
                 shutil.rmtree(p)
@@ -595,6 +605,12 @@ def main():
 
     print("== 6. Persist SQLite ==", flush=True)
     persist(funds, perf, dists, nav_snaps, gaps)
+
+    if not args.skip_holdings:
+        print("== 6b. EPF status and top-5 holdings ==", flush=True)
+        run_holdings_and_epf(force=args.force)
+    else:
+        print("== 6b. Skipping EPF/holdings ==", flush=True)
 
     print("== 7. Export xlsx ==", flush=True)
     export_xlsx(DB_PATH, XLSX_PATH)

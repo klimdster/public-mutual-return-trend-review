@@ -210,3 +210,58 @@ class PMClient:
             cache_prefix="dist",
             cache_key=f"distlist_{scheme_type}_{dist_feature}",
         )
+
+    def fund_explorer_data(self, date: str = "") -> dict:
+        return self.get_json(
+            f"/FundExplorerList/GetFundExplorerData?date={date}",
+            page_for_token="/Fund-Explorer-List",
+            cache_prefix="fundinfo",
+            cache_key=f"explorer_{date or 'latest'}",
+        )
+
+    def fund_reports(self, scheme_code: str, fund_type: str = "UT") -> dict:
+        if (fund_type or "UT").upper() == "PRS":
+            path = "/ECommunicationPRS/GetFundReportBySchemeCode"
+            page = "/funds-report-prs"
+        else:
+            path = "/ECommunicationUT/GetFundReportBySchemeCode"
+            page = "/funds-report-ut"
+        return self.get_json(
+            path,
+            page_for_token=page,
+            params={"schemeCode": scheme_code},
+            cache_prefix="reports",
+            cache_key=f"list_{fund_type}_{scheme_code}",
+        )
+
+    def download_report_pdf(self, doc_id: str, fund_type: str = "UT", force: bool = False) -> Path:
+        """Download an annual/semi-annual report PDF by doc id; cache the raw file."""
+        from config import CACHE_DIR
+        dest_dir = CACHE_DIR / "reports" / "pdf"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / f"{doc_id}.pdf"
+        if dest.exists() and dest.stat().st_size > 1000 and not force:
+            return dest
+        if (fund_type or "UT").upper() == "PRS":
+            path = f"/ECommunicationPRS/DownloadDocByDocId?docId={doc_id}"
+            page = "/funds-report-prs"
+        else:
+            path = f"/ECommunicationUT/DownloadDocByDocId?docId={doc_id}"
+            page = "/funds-report-ut"
+        data = self.get_json(
+            path,
+            page_for_token=page,
+            cache_prefix=None,
+            cache_key=None,
+            force=True,
+        )
+        rd = (data or {}).get("ResultData") or {}
+        import base64
+        raw = base64.b64decode(rd.get("FileBytes") or b"")
+        if len(raw) < 100 or not raw.startswith(b"%PDF"):
+            raise RuntimeError(f"Invalid PDF for doc {doc_id} ({len(raw)} bytes)")
+        dest.write_bytes(raw)
+        meta = dest.with_suffix(".meta.json")
+        import json
+        meta.write_text(json.dumps({"FileName": rd.get("FileName"), "MimeType": rd.get("MimeType"), "bytes": len(raw)}))
+        return dest
